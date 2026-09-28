@@ -15,7 +15,7 @@ set -euo pipefail
 #==============================================================================
 
 action="${1:-validate}"
-containerd_version="${CONTAINERD_VERSION:-2.3.5-1~ubuntu.24.04~noble}"
+containerd_version="${CONTAINERD_VERSION:-2.3.6-1~ubuntu.24.04~noble}"
 docker_buildx_version="${DOCKER_BUILDX_VERSION:-0.37.1-1~ubuntu.24.04~noble}"
 docker_compose_version="${DOCKER_COMPOSE_VERSION:-5.5.1-1~ubuntu.24.04~noble}"
 docker_engine_version="${DOCKER_ENGINE_VERSION:-5:29.8.1-1~ubuntu.24.04~noble}"
