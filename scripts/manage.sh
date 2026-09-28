@@ -24,8 +24,10 @@ release_key=${release_ref//[^a-zA-Z0-9._-]/-}
 release_path="$install_root/releases/$release_key"
 backup_directory="${JENKINS_BACKUP_DIRECTORY:-/var/backups/jenkins-controller}"
 backup_retention_days="${JENKINS_BACKUP_RETENTION_DAYS:-7}"
+backup_bucket="${JENKINS_BACKUP_BUCKET:-}"
 health_failure_file="${JENKINS_HEALTH_FAILURE_FILE:-/run/jenkins-controller-health-failures}"
 maintenance_file="${JENKINS_MAINTENANCE_FILE:-/run/jenkins-controller-maintenance}"
+retire_confirmation="${JENKINS_RETIRE_CONFIRMATION:-}"
 
 #==============================================================================
 # MANAGED JOB TOPOLOGY
@@ -578,6 +580,243 @@ backup_controller() {
 }
 
 #==============================================================================
+# OFF-HOST BACKUP
+#==============================================================================
+
+install_oci_cli() {
+  local cli_root=/opt/oci-cli/3.94.0
+  local cli_path="$cli_root/bin/oci"
+  local installer
+  local installer_checksum=079dcc9a3e2a61ec692400e30169c9996b2998ac8c4e205198ed5863283fcb76
+
+  if [[ -x "$cli_path" && "$($cli_path --version 2>&1)" == "3.94.0" ]]; then
+    printf '%s\n' "$cli_path"
+    return 0
+  fi
+
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' RETURN
+  curl --fail --silent --show-error --location \
+    https://raw.githubusercontent.com/oracle/oci-cli/v3.94.0/scripts/install/install.sh \
+    --output "$installer"
+  printf '%s  %s\n' "$installer_checksum" "$installer" | sha256sum --check --status
+  rm -rf "$cli_root"
+  bash "$installer" \
+    --accept-all-defaults \
+    --oci-cli-version 3.94.0 \
+    --install-dir "$cli_root/lib" \
+    --exec-dir "$cli_root/bin" \
+    --script-dir "$cli_root/scripts" >/dev/null
+  "$cli_path" --version >/dev/null
+  printf '%s\n' "$cli_path"
+}
+
+upload_backup_archive() {
+  local archive_path="$1"
+  local object_prefix="$2"
+  local archive_name
+  local archive_sha256
+  local cli_path
+  local metadata
+  local namespace
+  local object_name
+  local verification_archive
+
+  if [[ ! "$backup_bucket" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    printf 'JENKINS_BACKUP_BUCKET must identify the managed OCI backup bucket.\n' >&2
+    return 1
+  fi
+  tar --list --gzip --file "$archive_path" >/dev/null
+  archive_name=$(basename "$archive_path")
+  archive_sha256=$(sha256sum "$archive_path" | awk '{print $1}')
+  object_name="$object_prefix/$archive_name"
+  cli_path=$(install_oci_cli)
+  namespace=$($cli_path os ns get --auth instance_principal --query data --raw-output)
+  metadata=$(jq -cn --arg sha256 "$archive_sha256" '{sha256: $sha256}')
+  $cli_path os object put \
+    --auth instance_principal \
+    --namespace-name "$namespace" \
+    --bucket-name "$backup_bucket" \
+    --name "$object_name" \
+    --file "$archive_path" \
+    --metadata "$metadata" \
+    --force >/dev/null
+
+  verification_archive=$(mktemp "$backup_directory/.jenkins-offsite-verification.XXXXXX.tar.gz")
+  trap 'rm -f "$verification_archive"' RETURN
+  $cli_path os object get \
+    --auth instance_principal \
+    --namespace-name "$namespace" \
+    --bucket-name "$backup_bucket" \
+    --name "$object_name" \
+    --file "$verification_archive" >/dev/null
+  printf '%s  %s\n' "$archive_sha256" "$verification_archive" | sha256sum --check --status
+  tar --list --gzip --file "$verification_archive" >/dev/null
+  rm -f "$verification_archive"
+  trap - RETURN
+  printf 'jenkins_offsite_backup_object=%s\n' "$object_name"
+  printf 'jenkins_offsite_backup_sha256=%s\n' "$archive_sha256"
+  printf 'jenkins_offsite_backup=ready\n'
+}
+
+archive_controller() {
+  local archive_output
+  local archive_path
+
+  require_root
+  install_oci_cli >/dev/null
+  archive_output=$(backup_controller)
+  printf '%s\n' "$archive_output"
+  archive_path=$(sed -n 's/^jenkins_backup_archive=//p' <<< "$archive_output")
+  if [[ ! -f "$archive_path" ]]; then
+    printf 'Jenkins backup did not produce a managed archive.\n' >&2
+    return 1
+  fi
+  upload_backup_archive "$archive_path" jenkins/verified
+  printf 'jenkins_archive=ready\n'
+}
+
+#==============================================================================
+# PERMANENT CONTROLLER RETIREMENT
+#==============================================================================
+
+assert_controller_idle() {
+  local admin_password_file="$install_root/current/secrets/jenkins-admin-password"
+  local controller_origin="http://${JENKINS_BIND_ADDRESS:-127.0.0.1}:8080"
+  local busy_executors
+  local queued_items
+
+  busy_executors=$(curl --globoff --fail --silent --show-error \
+    --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
+    "$controller_origin/computer/api/json?tree=busyExecutors" | jq -r '.busyExecutors')
+  queued_items=$(curl --globoff --fail --silent --show-error \
+    --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
+    "$controller_origin/queue/api/json?tree=items[id]" | jq -r '.items | length')
+  if [[ "$busy_executors" != "0" || "$queued_items" != "0" ]]; then
+    printf 'Jenkins retirement requires zero busy executors and an empty queue.\n' >&2
+    return 1
+  fi
+  printf 'jenkins_retirement_idle=ready\n'
+}
+
+set_controller_scheduling() {
+  local endpoint="$1"
+  local admin_password_file="$install_root/current/secrets/jenkins-admin-password"
+  local controller_origin="http://${JENKINS_BIND_ADDRESS:-127.0.0.1}:8080"
+  local cookie_jar
+  local crumb
+  local crumb_field
+  local crumb_response
+
+  cookie_jar=$(mktemp)
+  chmod 0600 "$cookie_jar"
+  trap 'rm -f "$cookie_jar"' RETURN
+  crumb_response=$(curl --fail --silent --show-error \
+    --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
+    --cookie "$cookie_jar" \
+    --cookie-jar "$cookie_jar" \
+    "$controller_origin/crumbIssuer/api/json")
+  crumb_field=$(jq -r '.crumbRequestField' <<< "$crumb_response")
+  crumb=$(jq -r '.crumb' <<< "$crumb_response")
+  curl --fail --silent --show-error --output /dev/null --request POST \
+    --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
+    --cookie "$cookie_jar" \
+    --header "$crumb_field:$crumb" \
+    "$controller_origin/$endpoint"
+  rm -f "$cookie_jar"
+  trap - RETURN
+}
+
+quiet_controller() {
+  touch "$maintenance_file"
+  set_controller_scheduling quietDown
+}
+
+resume_controller() {
+  set_controller_scheduling cancelQuietDown
+  rm -f "$maintenance_file"
+}
+
+retire_controller() {
+  local archive_output
+  local archive_path
+  local compose_file="$install_root/current/compose.yaml"
+  local image
+  local images=()
+
+  require_root
+  if [[ "$retire_confirmation" != "RETIRE-JENKINS" ]]; then
+    printf 'JENKINS_RETIRE_CONFIRMATION must equal RETIRE-JENKINS.\n' >&2
+    return 1
+  fi
+  verify_controller || return 1
+  assert_controller_idle || return 1
+  install_oci_cli >/dev/null || return 1
+  while IFS= read -r image; do
+    images+=("$image")
+  done < <(docker compose --project-directory "$install_root/current" \
+    --file "$compose_file" config --images | sort -u)
+  archive_output=$(backup_controller) || return 1
+  printf '%s\n' "$archive_output"
+  archive_path=$(sed -n 's/^jenkins_backup_archive=//p' <<< "$archive_output")
+  if [[ ! -f "$archive_path" ]]; then
+    printf 'Jenkins retirement backup was not created.\n' >&2
+    return 1
+  fi
+  upload_backup_archive "$archive_path" jenkins/final || return 1
+
+  quiet_controller || return 1
+  trap 'resume_controller || true' EXIT
+  assert_controller_idle || return 1
+  systemctl disable --now jenkins-controller-backup.timer jenkins-controller-health.timer || return 1
+  systemctl stop jenkins-controller-backup.service jenkins-controller-health.service || return 1
+  systemctl disable --now jenkins-controller.service || return 1
+  trap - EXIT
+  docker compose --project-directory "$install_root/current" --file "$compose_file" \
+    down --volumes --remove-orphans || return 1
+  for image in "${images[@]}"; do
+    docker image rm --force "$image"
+  done
+  rm -f \
+    /etc/systemd/system/jenkins-controller.service \
+    /etc/systemd/system/jenkins-controller-backup.service \
+    /etc/systemd/system/jenkins-controller-backup.timer \
+    /etc/systemd/system/jenkins-controller-health.service \
+    /etc/systemd/system/jenkins-controller-health.timer \
+    "$health_failure_file" \
+    "$maintenance_file"
+  rm -rf "$install_root" "$backup_directory" /opt/oci-cli/3.94.0
+  systemctl daemon-reload
+  systemctl reset-failed >/dev/null 2>&1 || true
+  printf 'jenkins_retirement=ready\n'
+}
+
+retirement_status() {
+  local unexpected_assets=0
+
+  if systemctl is-active --quiet jenkins-controller.service || \
+    systemctl is-active --quiet jenkins-controller-backup.timer || \
+    systemctl is-active --quiet jenkins-controller-health.timer; then
+    printf 'A Jenkins systemd component remains active.\n' >&2
+    unexpected_assets=1
+  fi
+  if [[ -e "$install_root" || -e "$backup_directory" || -e /opt/oci-cli/3.94.0 ]]; then
+    printf 'A Jenkins host data directory remains.\n' >&2
+    unexpected_assets=1
+  fi
+  if docker ps --all --quiet --filter label=com.docker.compose.project=jenkins-controller | grep -q . || \
+    docker volume ls --quiet --filter label=com.docker.compose.project=jenkins-controller | grep -q . || \
+    docker image ls --format '{{.Repository}}' | grep -Eq '^jenkins-(controller|platform-agent)$'; then
+    printf 'A Jenkins Docker asset remains.\n' >&2
+    unexpected_assets=1
+  fi
+  if (( unexpected_assets != 0 )); then
+    return 1
+  fi
+  printf 'jenkins_retirement_status=ready\n'
+}
+
+#==============================================================================
 # CONTROLLER RESTORE
 #==============================================================================
 
@@ -917,6 +1156,9 @@ case "$action" in
   backup)
     backup_controller
     ;;
+  archive)
+    archive_controller
+    ;;
   restore)
     restore_controller
     ;;
@@ -925,6 +1167,12 @@ case "$action" in
     ;;
   test-restore)
     test_restore_controller
+    ;;
+  retire)
+    retire_controller
+    ;;
+  retirement-status)
+    retirement_status
     ;;
   *)
     printf 'Unsupported Jenkins lifecycle action: %s\n' "$action" >&2

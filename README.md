@@ -23,6 +23,7 @@ CONTROLLER PROFILE
 | containerd | `2.3.3` |
 | Docker Buildx | `0.36.1` |
 | Docker Compose | `5.5.1` |
+| OCI CLI | `3.94.0` |
 | Java heap | 512 MB initial, 1 GB maximum |
 | Controller limit | 0.70 CPU and 2 GB memory |
 | Platform agent limit | 0.50 CPU and 2 GB memory |
@@ -122,11 +123,22 @@ LIFECYCLE OPERATIONS
 | `verify` | No | Checks the running core version, zero controller executors, online platform agent, Docker socket isolation, authentication, metrics, UI CSP, resource-domain isolation, persisted administrator uniqueness, known recurring warnings, managed jobs, backup timer, and health watchdog |
 | `status` | No | Reports controller version, bounded metrics response metadata, backup timer, health watchdog, and Compose state; exits nonzero for an inactive component |
 | `backup` | Yes | Pauses new builds, drains executors, archives `JENKINS_HOME`, and resumes scheduling; the controller stays online |
+| `archive` | Yes | Creates a backup, uploads it to the versioned OCI bucket, downloads it, and verifies its SHA-256 and tar contents |
 | `restore` | Yes | Restores `JENKINS_RESTORE_ARCHIVE` |
 | `rollback` | Yes | Exchanges current and previous releases |
 | `test-restore` | Yes | Creates a fresh backup, restores it, and runs comprehensive verification |
+| `retire` | Yes | Requires an exact confirmation, verifies an idle controller and off-host backup, then removes every Jenkins service, container, volume, image, secret, release, and local backup |
+| `retirement-status` | No | Confirms that no Jenkins systemd, Docker, or host data assets remain |
 
-`jenkins-controller-backup.timer` runs daily at 03:00 with a random delay of up to 15 minutes. Backups are written root-only under `/var/backups/jenkins-controller` and archives older than seven days are removed. Copy retained archives to durable object storage with a separate, versioned backup job.
+`jenkins-controller-backup.timer` runs daily at 03:00 with a random delay of up to 15 minutes. Backups are written root-only under `/var/backups/jenkins-controller` and archives older than seven days are removed. The `archive` and `retire` actions upload to the versioned OCI backup bucket with instance-principal authentication and verify a fresh download before reporting success.
+
+## 🧹 Permanent Retirement
+
+Run `test-restore`, then `archive`, before the final retirement workflow. The
+`retire` action accepts only `RETIRE-JENKINS`, refuses an active build
+or queue, creates a new final off-host archive, and starts deletion only after
+downloaded checksum and tar verification pass. Record the emitted object name
+and SHA-256, then run `retirement-status` after removal.
 
 Backup HTTP requests have a 10-second connection timeout and a 30-second total timeout. Exit cleanup runs inside the backup subshell, including on archive failure or termination. If scheduling cannot resume, the service reports `jenkins_backup_resume=failed` and retains the maintenance sentinel for investigation. Changed-file archive errors remain failures; partial archives are not promoted to completed backups. Run `bash scripts/test-backup-cleanup.sh` to check isolated success, archive failure, termination, and rejected-resume paths.
 

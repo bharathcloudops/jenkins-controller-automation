@@ -20,25 +20,26 @@ automation_ref="${3:-}"
 jenkins_url="${4:-http://localhost:8080}"
 resource_root_url="${5:-http://jenkins-resources.localhost:8080}"
 bind_address="${6:-127.0.0.1}"
-restore_archive="${7:-}"
+operation_value="${7:-}"
+restore_archive="$operation_value"
+backup_bucket=${operation_value%%|*}
+retire_confirmation=${operation_value#*|}
 secret_bundle="${8:-}"
-jenkins_authority=${jenkins_url#*://}
-jenkins_host=${jenkins_authority%%:*}
-resource_root_authority=${resource_root_url#*://}
-resource_root_host=${resource_root_authority%%:*}
+jenkins_host=${jenkins_url#*://}; jenkins_host=${jenkins_host%%:*}
+resource_root_host=${resource_root_url#*://}; resource_root_host=${resource_root_host%%:*}
 
 case "$action" in
-  validate|dry-run|deploy|verify|status|scan|diagnose|backup|restore|rollback|test-restore) ;;
-  *) printf 'Unsupported Jenkins lifecycle action.\n' >&2; exit 2 ;;
+  validate|dry-run|deploy|verify|status|scan|diagnose|backup|archive|restore|rollback|test-restore|retire|retirement-status) ;;
+  *) printf 'Unsupported lifecycle action.\n' >&2; exit 2 ;;
 esac
 
 if [[ ! "$automation_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-  printf 'A GitHub owner/repository value is required.\n' >&2
+  printf 'GitHub owner/repository is required.\n' >&2
   exit 1
 fi
 
 if [[ ! "$automation_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  printf 'An immutable semantic version tag is required.\n' >&2
+  printf 'A semantic version tag is required.\n' >&2
   exit 1
 fi
 
@@ -62,12 +63,10 @@ fi
 
 temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT
-curl --fail --location --silent --show-error \
-  "https://github.com/$automation_repository/archive/refs/tags/$automation_ref.tar.gz" \
-  --output "$temporary_directory/automation.tar.gz"
 mkdir "$temporary_directory/source"
-tar --extract --gzip --file "$temporary_directory/automation.tar.gz" \
-  --directory "$temporary_directory/source" --strip-components=1
+curl --fail --location --silent --show-error \
+  "https://github.com/$automation_repository/archive/refs/tags/$automation_ref.tar.gz" | \
+  tar --extract --gzip --directory "$temporary_directory/source" --strip-components=1
 
 #==============================================================================
 # VERSIONED AUTOMATION EXECUTION
@@ -80,6 +79,8 @@ manage_environment=(
   "JENKINS_URL=$jenkins_url"
   "JENKINS_RESOURCE_ROOT_URL=$resource_root_url"
   "JENKINS_BIND_ADDRESS=$bind_address"
+  "JENKINS_BACKUP_BUCKET=$backup_bucket"
+  "JENKINS_RETIRE_CONFIRMATION=$retire_confirmation"
 )
 
 if [[ "$action" == "deploy" ]]; then

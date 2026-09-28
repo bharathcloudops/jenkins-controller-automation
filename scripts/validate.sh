@@ -24,6 +24,7 @@ required_files=(
   jcasc/jenkins.yaml
   scripts/agent-entrypoint.sh
   scripts/check-latest-versions.sh
+  scripts/test-retirement.sh
   systemd/jenkins-controller-backup.service
   systemd/jenkins-controller-backup.timer
   systemd/jenkins-controller-health.service
@@ -173,10 +174,22 @@ fi
 #==============================================================================
 
 bash "$repository_root/scripts/test-backup-cleanup.sh"
+bash "$repository_root/scripts/test-retirement.sh"
 
 if ! grep -Fq 'jenkins-controller-backup.timer' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'JENKINS_BACKUP_RETENTION_DAYS' "$repository_root/scripts/manage.sh"; then
   printf 'Jenkins backup scheduling and retention must be managed in versioned automation.\n' >&2
+  exit 1
+fi
+
+if ! grep -Fq 'RETIRE-JENKINS' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'jenkins/final' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq -- '--auth instance_principal' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'sha256sum --check --status' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'tar --list --gzip' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'down --volumes --remove-orphans' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq "printf 'jenkins_retirement_status=ready" "$repository_root/scripts/manage.sh"; then
+  printf 'Permanent retirement must verify an off-host backup before deleting every Jenkins runtime asset.\n' >&2
   exit 1
 fi
 
@@ -243,7 +256,7 @@ sample_arguments=$(jq -cn '[
   "https://jenkins.bharathcloudops.com",
   "https://jenkins-resources.bharathcloudops.com",
   "10.10.10.68",
-  "",
+  "bharathcloudops-prd-hyd-backups|RETIRE-JENKINS",
   "{\"admin_password\":\"AAAAAAAAAAAAAAAAAAAAAAAA\",\"github_token\":\"github-token-at-least-twenty\",\"registry_token\":\"registry-token-at-least-twenty\"}"
 ]')
 argument_line=$(jq -r '[.[] | @sh] | "set -- " + join(" ")' <<< "$sample_arguments")
