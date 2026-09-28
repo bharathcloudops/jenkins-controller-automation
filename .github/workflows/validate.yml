@@ -6,7 +6,7 @@
 # WORKFLOW IDENTITY
 #==============================================================================
 
-name: Validate Jenkins controller
+name: 01 - Validate Jenkins controller
 
 #==============================================================================
 # WORKFLOW TRIGGERS
@@ -46,23 +46,23 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
+      - name: 01 - Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Validate Bash
+      - name: 02 - Validate Bash
         run: shellcheck scripts/*.sh
 
-      - name: Validate controller configuration
+      - name: 03 - Validate controller configuration
         run: bash scripts/validate.sh
 
-      - name: Verify latest version pins
+      - name: 04 - Verify latest version pins
         run: bash scripts/check-latest-versions.sh
 
-      - name: Validate dry run
+      - name: 05 - Validate dry run
         run: bash scripts/manage.sh dry-run
 
-      - name: Validate bootstrap payload size
+      - name: 06 - Validate bootstrap payload size
         run: test "$(wc -c < scripts/bootstrap.sh)" -le 4096
 
-      - name: Build controller image
+      - name: 07 - Build controller image
         run: docker compose build
