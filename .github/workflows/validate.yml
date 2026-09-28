@@ -42,6 +42,7 @@ concurrency:
 
 jobs:
   validate:
+    name: 01 - Validate Jenkins Controller
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
