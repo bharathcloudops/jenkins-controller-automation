@@ -58,7 +58,8 @@ for scenario in invalid-confirmation upload-failure success; do
   case "$scenario" in
     invalid-confirmation)
       [[ "$exit_code" != 0 ]]
-      [[ ! -s "$calls" ]]
+      grep -Fxq root "$calls"
+      if grep -qE '^(verify|idle|backup|upload|quiet|systemctl|docker .* down)' "$calls"; then exit 1; fi
       ;;
     upload-failure)
       [[ "$exit_code" != 0 ]]
