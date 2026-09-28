@@ -59,7 +59,7 @@ fi
 
 if ! grep -Fq 'COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/docker-buildx' \
   "$repository_root/Dockerfile.agent" || \
-  ! grep -Fq 'jq=1.7.1-6+deb13u3' "$repository_root/Dockerfile.agent" || \
+  ! grep -Fq 'jq=1.7.1-6+deb13u4' "$repository_root/Dockerfile.agent" || \
   ! grep -Fq 'rm -rf /var/lib/apt/lists/*' "$repository_root/Dockerfile.agent"; then
   printf 'The platform agent must include Buildx and pinned jq with package metadata cleanup.\n' >&2
   exit 1
@@ -238,7 +238,7 @@ fi
 
 sample_arguments=$(jq -cn '[
   "deploy",
-  "bharathadigopula/jenkins-controller-automation",
+  "bharathcloudops/jenkins-controller-automation",
   "v1.0.7",
   "https://jenkins.bharathcloudops.com",
   "https://jenkins-resources.bharathcloudops.com",

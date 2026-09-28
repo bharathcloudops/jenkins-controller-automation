@@ -5,7 +5,7 @@
 @Library('jenkins-pipeline-templates@v1.4.0') _
 
 repositoryValidationPipeline(
-    githubRepository: 'bharathadigopula/jenkins-controller-automation',
+    githubRepository: 'bharathcloudops/jenkins-controller-automation',
     shellSearchPath: 'scripts',
     validationScript: 'scripts/validate.sh',
     validationCommands: [

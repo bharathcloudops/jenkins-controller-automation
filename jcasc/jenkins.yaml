@@ -113,7 +113,7 @@ unclassified:
           modernSCM:
             scm:
               gitSource:
-                remote: https://github.com/bharathadigopula/jenkins-pipeline-templates.git
+                remote: https://github.com/bharathcloudops/jenkins-pipeline-templates.git
   location:
     url: ${JENKINS_URL}
   resourceRoot:
@@ -198,7 +198,7 @@ jobs:
               scm {
                 git {
                   remote {
-                    url('https://github.com/bharathadigopula/clinirova.git')
+                    url('https://github.com/bharathcloudops/clinirova.git')
                     credentials('github-scm')
                   }
                   branch('*/main')
@@ -218,7 +218,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -237,13 +237,32 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
               }
             }
             scriptPath('.jenkins/pipelines/monitoring-stack.groovy')
+            lightweight(true)
+          }
+        }
+      }
+  - script: >
+      pipelineJob('bharath-oci-host-config/configure-github-runners') {
+        description('Repository-managed GitHub Actions runner lifecycle')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
+                  credentials('github-scm')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('.jenkins/pipelines/github-runners.groovy')
             lightweight(true)
           }
         }
@@ -256,7 +275,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -275,7 +294,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/tf-bharath-oci-infra.git')
+                  url('https://github.com/bharathcloudops/tf-bharath-oci-infra.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -294,7 +313,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -313,7 +332,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -341,7 +360,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/jenkins-controller-automation.git')
+                  url('https://github.com/bharathcloudops/jenkins-controller-automation.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -369,7 +388,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/monitoring-stack-automation.git')
+                  url('https://github.com/bharathcloudops/monitoring-stack-automation.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -388,7 +407,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/ignitox-wordpress.git')
+                  url('https://github.com/bharathcloudops/ignitox-wordpress.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
@@ -407,7 +426,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('https://github.com/bharathadigopula/bharath-oci-host-config.git')
+                  url('https://github.com/bharathcloudops/bharath-oci-host-config.git')
                   credentials('github-scm')
                 }
                 branch('*/main')
