@@ -238,7 +238,7 @@ fi
 
 sample_arguments=$(jq -cn '[
   "deploy",
-  "bharathadigopula/jenkins-controller-automation",
+  "bharathcloudops/jenkins-controller-automation",
   "v1.0.7",
   "https://jenkins.bharathcloudops.com",
   "https://jenkins-resources.bharathcloudops.com",
