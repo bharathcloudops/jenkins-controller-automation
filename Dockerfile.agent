@@ -27,7 +27,7 @@ COPY scripts/agent-entrypoint.sh /usr/local/bin/jenkins-platform-agent-entrypoin
 
 RUN apt-get update >/dev/null \
 		&& DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-			jq=1.7.1-6+deb13u3 \
+			jq=1.7.1-6+deb13u4 \
 		&& rm -rf /var/lib/apt/lists/* \
 		&& chmod 0755 /usr/local/bin/jenkins-platform-agent-entrypoint
 
