@@ -847,15 +847,28 @@ restore_controller() {
   printf 'jenkins_restore_reset=ready\n'
   tar --extract --gzip --file "$archive_path" --directory "$volume_path"
   printf 'jenkins_restore_extract=ready\n'
-  if systemctl start jenkins-controller.service > "$start_log" 2>&1; then
-    rm -f "$start_log"
-  else
+  if ! systemctl start --no-block jenkins-controller.service > "$start_log" 2>&1; then
     cat "$start_log"
     systemctl status jenkins-controller.service --no-pager 2>&1 | tail -n 40 || true
     journalctl --unit jenkins-controller.service --no-pager --lines 40 2>&1 || true
     show_controller_diagnostics 2>&1
     return 1
   fi
+  for _ in {1..45}; do
+    if systemctl is-active --quiet jenkins-controller.service ||
+      systemctl is-failed --quiet jenkins-controller.service; then
+      break
+    fi
+    sleep 2
+  done
+  if ! systemctl is-active --quiet jenkins-controller.service; then
+    cat "$start_log"
+    systemctl status jenkins-controller.service --no-pager 2>&1 | tail -n 40 || true
+    journalctl --unit jenkins-controller.service --no-pager --lines 40 2>&1 || true
+    show_controller_diagnostics 2>&1
+    return 1
+  fi
+  rm -f "$start_log"
   printf 'jenkins_restore_start=ready\n'
   rm -f "$maintenance_file"
   trap - EXIT
