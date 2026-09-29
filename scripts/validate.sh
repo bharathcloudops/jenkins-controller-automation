@@ -449,6 +449,8 @@ fi
 if ! grep -Fq "printf 'jenkins_validate=ready" "$repository_root/scripts/manage.sh" || \
   [[ "$(grep -Fc "printf 'jenkins_deploy=ready" "$repository_root/scripts/manage.sh")" != "2" ]] || \
   [[ "$(grep -Fc "printf 'jenkins_test_restore=ready" "$repository_root/scripts/manage.sh")" != "2" ]] || \
+  ! grep -Fq "archive_output=\$(backup_controller)" "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq "archive_path=\$(sed -n 's/^jenkins_backup_archive=//p' <<< \"\$archive_output\")" "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'jenkins_metrics_wait=attempt_' "$repository_root/scripts/manage.sh"; then
   printf 'Long Jenkins lifecycle actions must retain required markers and bounded progress output.\n' >&2
   exit 1
