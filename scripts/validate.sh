@@ -411,6 +411,12 @@ if ! grep -Fq 'controller_origin/prometheus/' "$repository_root/scripts/manage.s
   exit 1
 fi
 
+if ! grep -Fq 'wait_for_agent_nodes()' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'controller_origin/computer/api/json' "$repository_root/scripts/manage.sh"; then
+  printf 'Jenkins verification must wait for the platform agent topology.\n' >&2
+  exit 1
+fi
+
 if ! grep -Fq 'X-Jenkins:' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'jenkins_version=%s' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'journalctl --unit jenkins-controller.service' "$repository_root/scripts/manage.sh"; then
