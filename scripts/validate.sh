@@ -197,6 +197,8 @@ backup_function=$(sed -n '/backup_controller()/,/^}/p' "$repository_root/scripts
 if grep -Fq 'systemctl stop jenkins-controller.service' <<< "$backup_function" || \
   ! grep -Fq 'quietDown' <<< "$backup_function" || \
   ! grep -Fq 'cancelQuietDown' <<< "$backup_function" || \
+  ! grep -Fq -- '--ignore-failed-read --warning=no-file-changed' <<< "$backup_function" || \
+  ! grep -Fq "tar --list --gzip --file \"\$archive_staging_path\"" <<< "$backup_function" || \
   ! grep -Fq "cookie_jar=\$(mktemp)" <<< "$backup_function" || \
   ! grep -Fq -- "--cookie \"\$cookie_jar\"" <<< "$backup_function" || \
   ! grep -Fq -- "--cookie-jar \"\$cookie_jar\"" <<< "$backup_function" || \
