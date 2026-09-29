@@ -417,6 +417,12 @@ if ! grep -Fq 'wait_for_agent_nodes()' "$repository_root/scripts/manage.sh" || \
   exit 1
 fi
 
+if ! sed -n '/test_restore_controller()/,/^}/p' "$repository_root/scripts/manage.sh" | \
+  grep -Fq 'tail -c 700'; then
+  printf 'Jenkins restore tests must retain bounded failure diagnostics.\n' >&2
+  exit 1
+fi
+
 if ! grep -Fq 'X-Jenkins:' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'jenkins_version=%s' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'journalctl --unit jenkins-controller.service' "$repository_root/scripts/manage.sh"; then

@@ -921,6 +921,7 @@ restore_controller() {
 test_restore_controller() {
   local archive_output
   local archive_path
+  local restore_output
 
   archive_output=$(backup_controller)
   printf '%s\n' "$archive_output"
@@ -930,7 +931,11 @@ test_restore_controller() {
     return 1
   fi
   printf 'jenkins_test_restore=ready\n'
-  JENKINS_RESTORE_ARCHIVE="$archive_path" restore_controller
+  if ! restore_output=$(JENKINS_RESTORE_ARCHIVE="$archive_path" restore_controller 2>&1); then
+    printf '%s\n' "$restore_output" | tail -c 700
+    return 1
+  fi
+  printf '%s\n' "$restore_output"
   printf 'jenkins_test_restore=ready\n'
 }
 
