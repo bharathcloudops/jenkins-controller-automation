@@ -145,7 +145,13 @@ reconcile_legacy_jobs() {
 #==============================================================================
 
 validate_controller() {
-  bash "$source_root/scripts/validate.sh"
+  local validation_output
+
+  if ! validation_output=$(bash "$source_root/scripts/validate.sh" 2>&1); then
+    printf '%s\n' "$validation_output" >&2
+    return 1
+  fi
+  printf 'jenkins_validation=ready\n'
 }
 
 #==============================================================================

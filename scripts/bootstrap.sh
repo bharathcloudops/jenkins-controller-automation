@@ -85,7 +85,6 @@ manage_environment=(
 
 if [[ "$action" == "deploy" ]]; then
   sudo -n bash "$temporary_directory/source/scripts/install-docker.sh" "$action"
-  printf 'jenkins_deploy=ready\n'
   sudo -n "${manage_environment[@]}" bash "$manage_script" "$action" "$secret_bundle"
 elif [[ "$action" == "validate" || "$action" == "dry-run" ]]; then
   bash "$temporary_directory/source/scripts/install-docker.sh" "$action"

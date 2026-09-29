@@ -262,7 +262,8 @@ fi
 if ! grep -Fq 'apt-get update >/dev/null' "$repository_root/scripts/install-docker.sh" || \
   ! grep -Fq 'docker version >/dev/null' "$repository_root/scripts/install-docker.sh" || \
   ! grep -Fq 'docker compose version >/dev/null' "$repository_root/scripts/install-docker.sh" || \
-  ! grep -Fq "printf 'jenkins_deploy=ready" "$repository_root/scripts/bootstrap.sh"; then
+  grep -Fq "printf 'jenkins_deploy=ready" "$repository_root/scripts/bootstrap.sh" || \
+  ! grep -Fq "validation_output=\$(bash" "$repository_root/scripts/manage.sh"; then
   printf 'Routine installer output must remain quiet so OCI retains diagnostics.\n' >&2
   exit 1
 fi
