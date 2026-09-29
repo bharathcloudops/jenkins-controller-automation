@@ -390,6 +390,33 @@ verify_controller() {
     return 1
   fi
 
+  #==============================================================================
+  # PLATFORM AGENT READINESS
+  #==============================================================================
+
+  wait_for_agent_nodes() {
+    local endpoint="$1"
+    local password_file="$2"
+    local attempt
+    local agent_nodes
+
+    for (( attempt = 1; attempt <= 60; attempt++ )); do
+      if agent_nodes=$(curl --globoff --fail --silent --show-error \
+        --user "${JENKINS_ADMIN_ID:-admin}:$(<"$password_file")" "$endpoint" 2>/dev/null) && \
+        jq -e '
+          any(.computer[]; .displayName == "Built-In Node" and .numExecutors == 0) and
+          any(.computer[]; .displayName == "platform-agent" and .numExecutors == 1 and .offline == false)
+        ' <<< "$agent_nodes" >/dev/null; then
+        printf '%s\n' "$agent_nodes"
+        return 0
+      fi
+      sleep 5
+    done
+
+    printf 'Jenkins controller isolation or platform agent readiness did not converge.\n' >&2
+    return 1
+  }
+
   wait_for_endpoint "$controller_origin/login"
   expected_controller_image=$(sed -n 's/^JENKINS_CONTROLLER_VERSION=//p' "$install_root/current/.env")
   expected_controller_version=${expected_controller_image%-lts-jdk21}
@@ -427,16 +454,9 @@ verify_controller() {
     return 1
   fi
   wait_for_metrics "$controller_origin/prometheus/" "$admin_password_file"
-  agent_nodes=$(curl --globoff --fail --silent --show-error \
-    --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
-    "$controller_origin/computer/api/json?tree=computer[displayName,numExecutors,offline]")
-  if ! jq -e '
-    any(.computer[]; .displayName == "Built-In Node" and .numExecutors == 0) and
-    any(.computer[]; .displayName == "platform-agent" and .numExecutors == 1 and .offline == false)
-  ' <<< "$agent_nodes" >/dev/null; then
-    printf 'Jenkins controller isolation or platform agent readiness is invalid.\n' >&2
-    return 1
-  fi
+  agent_nodes=$(wait_for_agent_nodes \
+    "$controller_origin/computer/api/json?tree=computer[displayName,numExecutors,offline]" \
+    "$admin_password_file")
   controller_container_id=$(docker compose \
     --project-directory "$install_root/current" \
     --file "$install_root/current/compose.yaml" \
