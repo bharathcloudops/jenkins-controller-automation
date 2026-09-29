@@ -838,10 +838,18 @@ restore_controller() {
   volume_path=$(docker volume inspect jenkins-controller_jenkins-home --format '{{ .Mountpoint }}')
   touch "$maintenance_file"
   systemctl stop jenkins-controller.service
+  printf 'jenkins_restore_stop=ready\n'
   trap 'systemctl start jenkins-controller.service; rm -f "$maintenance_file"' EXIT
   find "$volume_path" -mindepth 1 -delete
+  printf 'jenkins_restore_reset=ready\n'
   tar --extract --gzip --file "$archive_path" --directory "$volume_path"
-  systemctl start jenkins-controller.service
+  printf 'jenkins_restore_extract=ready\n'
+  if ! systemctl start jenkins-controller.service; then
+    journalctl --unit jenkins-controller.service --no-pager --lines 100 >&2
+    show_controller_diagnostics
+    return 1
+  fi
+  printf 'jenkins_restore_start=ready\n'
   rm -f "$maintenance_file"
   trap - EXIT
   verify_controller
