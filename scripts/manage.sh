@@ -234,7 +234,7 @@ deploy_controller() {
   rm -f "$health_failure_file"
   trap 'rm -f "$maintenance_file"' EXIT
   systemctl stop jenkins-controller-health.timer >/dev/null 2>&1 || true
-  if ! systemctl restart jenkins-controller.service; then
+  if ! systemctl reload-or-restart jenkins-controller.service; then
     journalctl --unit jenkins-controller.service --no-pager --lines 200 >&2
     return 1
   fi

@@ -209,8 +209,8 @@ if grep -Fq 'systemctl stop jenkins-controller.service' <<< "$backup_function" |
   exit 1
 fi
 
-if ! grep -Fq 'systemctl restart jenkins-controller.service' "$repository_root/scripts/manage.sh"; then
-  printf 'Deployment must restart the Jenkins service to activate each immutable release.\n' >&2
+if ! grep -Fq 'systemctl reload-or-restart jenkins-controller.service' "$repository_root/scripts/manage.sh"; then
+  printf 'Deployment must reconcile Jenkins without stopping an unchanged container.\n' >&2
   exit 1
 fi
 
