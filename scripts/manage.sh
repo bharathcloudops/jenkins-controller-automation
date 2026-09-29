@@ -829,6 +829,8 @@ retirement_status() {
 #==============================================================================
 
 restore_controller() {
+  local start_log
+
   require_root
   archive_path="${JENKINS_RESTORE_ARCHIVE:-}"
   if [[ ! "$archive_path" =~ ^${backup_directory}/jenkins-home-[0-9]{8}T[0-9]{6}Z\.tar\.gz$ || ! -f "$archive_path" ]]; then
@@ -839,14 +841,19 @@ restore_controller() {
   touch "$maintenance_file"
   systemctl stop jenkins-controller.service
   printf 'jenkins_restore_stop=ready\n'
-  trap 'systemctl start jenkins-controller.service; rm -f "$maintenance_file"' EXIT
+  start_log=$(mktemp)
+  trap 'systemctl start --no-block jenkins-controller.service >/dev/null 2>&1 || true; rm -f "$maintenance_file" "${start_log:-}"' EXIT
   find "$volume_path" -mindepth 1 -delete
   printf 'jenkins_restore_reset=ready\n'
   tar --extract --gzip --file "$archive_path" --directory "$volume_path"
   printf 'jenkins_restore_extract=ready\n'
-  if ! systemctl start jenkins-controller.service; then
-    journalctl --unit jenkins-controller.service --no-pager --lines 100 >&2
-    show_controller_diagnostics
+  if systemctl start jenkins-controller.service > "$start_log" 2>&1; then
+    rm -f "$start_log"
+  else
+    cat "$start_log"
+    systemctl status jenkins-controller.service --no-pager 2>&1 | tail -n 40 || true
+    journalctl --unit jenkins-controller.service --no-pager --lines 40 2>&1 || true
+    show_controller_diagnostics 2>&1
     return 1
   fi
   printf 'jenkins_restore_start=ready\n'
