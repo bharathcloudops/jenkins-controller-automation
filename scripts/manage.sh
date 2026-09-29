@@ -509,6 +509,7 @@ backup_controller() {
   local admin_password_file="$install_root/current/secrets/jenkins-admin-password"
   local archive_staging_path
   local busy_executors
+  local controller_container_id=""
   local controller_origin="http://${JENKINS_BIND_ADDRESS:-127.0.0.1}:8080"
   local cookie_jar
   local crumb
@@ -540,7 +541,7 @@ backup_controller() {
   touch "$maintenance_file"
   trap 'exit 143' TERM
   trap 'exit 130' INT
-  trap 'if curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --output /dev/null --request POST --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" --cookie "$cookie_jar" --header "$crumb_field:$crumb" "$controller_origin/cancelQuietDown"; then rm -f "$maintenance_file"; else printf "jenkins_backup_resume=failed maintenance_marker=retained\n" >&2; fi; rm -f "$archive_staging_path" "$cookie_jar"' EXIT
+  trap 'if [[ -n "${controller_container_id:-}" ]]; then docker unpause "$controller_container_id" >/dev/null 2>&1 || true; fi; if curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --output /dev/null --request POST --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" --cookie "$cookie_jar" --header "$crumb_field:$crumb" "$controller_origin/cancelQuietDown"; then rm -f "$maintenance_file"; else printf "jenkins_backup_resume=failed maintenance_marker=retained\n" >&2; fi; rm -f "$archive_staging_path" "$cookie_jar"' EXIT
   curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --output /dev/null --request POST \
     --user "${JENKINS_ADMIN_ID:-admin}:$(<"$admin_password_file")" \
     --cookie "$cookie_jar" \
@@ -562,8 +563,13 @@ backup_controller() {
     return 1
   fi
 
-  tar --create --gzip --ignore-failed-read --warning=no-file-changed \
-    --file "$archive_staging_path" --directory "$volume_path" .
+  controller_container_id=$(docker compose --project-directory "$install_root/current" \
+    --file "$install_root/current/compose.yaml" ps --quiet jenkins)
+  [[ -n "$controller_container_id" ]]
+  docker pause "$controller_container_id" >/dev/null
+  tar --create --gzip --file "$archive_staging_path" --directory "$volume_path" .
+  docker unpause "$controller_container_id" >/dev/null
+  controller_container_id=""
   tar --list --gzip --file "$archive_staging_path" >/dev/null
   chmod 0600 "$archive_staging_path"
   mv "$archive_staging_path" "$archive_path"
