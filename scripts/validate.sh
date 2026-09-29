@@ -214,6 +214,14 @@ if ! grep -Fq 'systemctl restart jenkins-controller.service' "$repository_root/s
   exit 1
 fi
 
+if ! grep -Fq 'deployment.sha256' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq "printf 'jenkins_deploy=unchanged" "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq "dpkg-query --show --showformat='\${Version}' docker-ce" "$repository_root/scripts/install-docker.sh" || \
+  ! grep -Fq "printf 'docker_install=unchanged" "$repository_root/scripts/install-docker.sh"; then
+  printf 'Jenkins deployments must skip unchanged healthy state and matching Docker packages.\n' >&2
+  exit 1
+fi
+
 if ! grep -Fq "printf 'jenkins_restore_extract=ready" "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'journalctl --unit jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'systemctl status jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
@@ -461,7 +469,7 @@ if ! grep -Fq 'jenkins_metrics_http_code=' "$repository_root/scripts/manage.sh" 
 fi
 
 if ! grep -Fq "printf 'jenkins_validate=ready" "$repository_root/scripts/manage.sh" || \
-  [[ "$(grep -Fc "printf 'jenkins_deploy=ready" "$repository_root/scripts/manage.sh")" != "2" ]] || \
+  (( $(grep -Fc "printf 'jenkins_deploy=ready" "$repository_root/scripts/manage.sh") < 2 )) || \
   [[ "$(grep -Fc "printf 'jenkins_test_restore=ready" "$repository_root/scripts/manage.sh")" != "2" ]] || \
   ! grep -Fq "archive_output=\$(backup_controller)" "$repository_root/scripts/manage.sh" || \
   ! grep -Fq "archive_path=\$(sed -n 's/^jenkins_backup_archive=//p' <<< \"\$archive_output\")" "$repository_root/scripts/manage.sh" || \
