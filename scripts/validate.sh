@@ -218,6 +218,8 @@ if ! grep -Fq "printf 'jenkins_restore_extract=ready" "$repository_root/scripts/
   ! grep -Fq 'journalctl --unit jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'systemctl status jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'systemctl start --no-block jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'for _ in {1..45}' "$repository_root/scripts/manage.sh" || \
+  ! grep -Fq 'systemctl is-failed --quiet jenkins-controller.service' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'show_controller_diagnostics' "$repository_root/scripts/manage.sh"; then
   printf 'Restore failures must identify the completed phase and report controller diagnostics.\n' >&2
   exit 1
