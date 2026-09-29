@@ -423,6 +423,12 @@ if ! sed -n '/test_restore_controller()/,/^}/p' "$repository_root/scripts/manage
   exit 1
 fi
 
+if ! sed -n '/upload_backup_archive()/,/^}/p' "$repository_root/scripts/manage.sh" | \
+  grep -Fq 'transfer_output='; then
+  printf 'Jenkins archive transfers must suppress progress and retain bounded failures.\n' >&2
+  exit 1
+fi
+
 if ! grep -Fq 'X-Jenkins:' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'jenkins_version=%s' "$repository_root/scripts/manage.sh" || \
   ! grep -Fq 'journalctl --unit jenkins-controller.service' "$repository_root/scripts/manage.sh"; then

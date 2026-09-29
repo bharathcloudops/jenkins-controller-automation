@@ -634,6 +634,7 @@ install_oci_cli() {
   local cli_path="$cli_root/bin/oci"
   local installer
   local installer_checksum=079dcc9a3e2a61ec692400e30169c9996b2998ac8c4e205198ed5863283fcb76
+  local installer_output
 
   if [[ -x "$cli_path" && "$($cli_path --version 2>&1)" == "3.94.0" ]]; then
     printf '%s\n' "$cli_path"
@@ -647,12 +648,15 @@ install_oci_cli() {
     --output "$installer"
   printf '%s  %s\n' "$installer_checksum" "$installer" | sha256sum --check --status
   rm -rf "$cli_root"
-  bash "$installer" \
+  if ! installer_output=$(bash "$installer" \
     --accept-all-defaults \
     --oci-cli-version 3.94.0 \
     --install-dir "$cli_root/lib" \
     --exec-dir "$cli_root/bin" \
-    --script-dir "$cli_root/scripts" >/dev/null
+    --script-dir "$cli_root/scripts" 2>&1 >/dev/null); then
+    printf '%s\n' "$installer_output" | tail -c 700 >&2
+    return 1
+  fi
   "$cli_path" --version >/dev/null
   printf '%s\n' "$cli_path"
 }
@@ -666,6 +670,7 @@ upload_backup_archive() {
   local metadata
   local namespace
   local object_name
+  local transfer_output
   local verification_archive
 
   if [[ ! "$backup_bucket" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -679,23 +684,29 @@ upload_backup_archive() {
   cli_path=$(install_oci_cli)
   namespace=$($cli_path os ns get --auth instance_principal --query data --raw-output)
   metadata=$(jq -cn --arg sha256 "$archive_sha256" '{sha256: $sha256}')
-  $cli_path os object put \
+  if ! transfer_output=$($cli_path os object put \
     --auth instance_principal \
     --namespace-name "$namespace" \
     --bucket-name "$backup_bucket" \
     --name "$object_name" \
     --file "$archive_path" \
     --metadata "$metadata" \
-    --force >/dev/null
+    --force 2>&1 >/dev/null); then
+    printf '%s\n' "$transfer_output" | tail -c 700 >&2
+    return 1
+  fi
 
   verification_archive=$(mktemp "$backup_directory/.jenkins-offsite-verification.XXXXXX.tar.gz")
   trap 'rm -f "$verification_archive"' RETURN
-  $cli_path os object get \
+  if ! transfer_output=$($cli_path os object get \
     --auth instance_principal \
     --namespace-name "$namespace" \
     --bucket-name "$backup_bucket" \
     --name "$object_name" \
-    --file "$verification_archive" >/dev/null
+    --file "$verification_archive" 2>&1 >/dev/null); then
+    printf '%s\n' "$transfer_output" | tail -c 700 >&2
+    return 1
+  fi
   printf '%s  %s\n' "$archive_sha256" "$verification_archive" | sha256sum --check --status
   tar --list --gzip --file "$verification_archive" >/dev/null
   rm -f "$verification_archive"
