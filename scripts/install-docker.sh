@@ -80,8 +80,8 @@ if [[ "$(dpkg-query --show --showformat='${Version}' docker-ce 2>/dev/null || tr
   "$(dpkg-query --show --showformat='${Version}' docker-ce-cli 2>/dev/null || true)" == "$docker_engine_version" &&
   "$(dpkg-query --show --showformat='${Version}' containerd.io 2>/dev/null || true)" == "$containerd_version" &&
   "$(dpkg-query --show --showformat='${Version}' docker-buildx-plugin 2>/dev/null || true)" == "$docker_buildx_version" &&
-  "$(dpkg-query --show --showformat='${Version}' docker-compose-plugin 2>/dev/null || true)" == "$docker_compose_version" &&
-  systemctl is-active --quiet docker ]]; then
+  "$(dpkg-query --show --showformat='${Version}' docker-compose-plugin 2>/dev/null || true)" == "$docker_compose_version" ]] &&
+  systemctl is-active --quiet docker; then
   docker version >/dev/null
   docker compose version >/dev/null
   printf 'docker_install=unchanged\n'
