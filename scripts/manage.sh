@@ -562,7 +562,9 @@ backup_controller() {
     return 1
   fi
 
-  tar --create --gzip --file "$archive_staging_path" --directory "$volume_path" .
+  tar --create --gzip --ignore-failed-read --warning=no-file-changed \
+    --file "$archive_staging_path" --directory "$volume_path" .
+  tar --list --gzip --file "$archive_staging_path" >/dev/null
   chmod 0600 "$archive_staging_path"
   mv "$archive_staging_path" "$archive_path"
   curl --fail --silent --show-error --connect-timeout 10 --max-time 30 --output /dev/null --request POST \
