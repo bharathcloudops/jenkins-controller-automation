@@ -182,6 +182,9 @@ EOF
 #==============================================================================
 
 deploy_controller() {
+  local deployment_fingerprint
+  local fingerprint_file="$install_root/deployment.sha256"
+
   require_root
   if ! jq -e '
     type == "object" and
@@ -195,6 +198,12 @@ deploy_controller() {
 
   validate_controller
   docker compose version >/dev/null
+  deployment_fingerprint=$(printf '%s\0' "$release_ref" "${JENKINS_ADMIN_ID:-admin}" "${JENKINS_BIND_ADDRESS:-127.0.0.1}" "${JENKINS_RESOURCE_ROOT_URL:-http://jenkins-resources.localhost:8080}" "${JENKINS_URL:-http://localhost:8080}" "$secret_bundle" | sha256sum | awk '{print $1}')
+  if [[ -f "$fingerprint_file" && "$(<"$fingerprint_file")" == "$deployment_fingerprint" && -L "$install_root/current" ]] && verify_controller; then
+    printf 'jenkins_deploy=unchanged\n'
+    printf 'jenkins_deploy=ready\n'
+    return 0
+  fi
   install -d -m 0755 "$install_root/releases"
   rm -rf "$release_path"
   install -d -m 0755 "$release_path"
@@ -225,7 +234,7 @@ deploy_controller() {
   rm -f "$health_failure_file"
   trap 'rm -f "$maintenance_file"' EXIT
   systemctl stop jenkins-controller-health.timer >/dev/null 2>&1 || true
-  if ! systemctl restart jenkins-controller.service; then
+  if ! systemctl reload-or-restart jenkins-controller.service; then
     journalctl --unit jenkins-controller.service --no-pager --lines 200 >&2
     return 1
   fi
@@ -235,6 +244,9 @@ deploy_controller() {
   activate_managed_jobs
   reconcile_legacy_jobs
   verify_controller
+  printf '%s\n' "$deployment_fingerprint" > "$fingerprint_file.partial"
+  chmod 0600 "$fingerprint_file.partial"
+  mv "$fingerprint_file.partial" "$fingerprint_file"
   rm -f "$maintenance_file"
   trap - EXIT
   printf 'jenkins_deploy=ready\n'
