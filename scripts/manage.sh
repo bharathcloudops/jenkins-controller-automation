@@ -845,7 +845,16 @@ restore_controller() {
 #==============================================================================
 
 test_restore_controller() {
-  backup_controller
+  local archive_output
+  local archive_path
+
+  archive_output=$(backup_controller)
+  printf '%s\n' "$archive_output"
+  archive_path=$(sed -n 's/^jenkins_backup_archive=//p' <<< "$archive_output")
+  if [[ ! -f "$archive_path" ]]; then
+    printf 'Jenkins restore test backup was not created.\n' >&2
+    return 1
+  fi
   printf 'jenkins_test_restore=ready\n'
   JENKINS_RESTORE_ARCHIVE="$archive_path" restore_controller
   printf 'jenkins_test_restore=ready\n'
